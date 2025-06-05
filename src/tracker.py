@@ -159,9 +159,21 @@ class TrackerServer:
             return self.handle_create_room(request)
         elif cmd == "REGISTER":
             return self.handle_register(request)
+        elif cmd == "CHECK_USER":
+            return self.handle_check_user(request)
         else:
             return {"status": "error", "message": "Comando inválido"}
-    
+        
+    def handle_check_user(self, request):
+        """Verifica se um nome de usuário já existe"""
+        username = request.get("user", "")
+        
+        if not username:
+            return {"status": "error", "message": "Nome de usuário faltando"}
+        
+        exists = username in self.users
+        return {"status": "success", "exists": exists}
+
     def handle_register(self, request):
         """Processa registro de novo usuário com senha criptografada"""
         username = request.get("user", "")

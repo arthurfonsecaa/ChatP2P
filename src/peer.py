@@ -2,6 +2,7 @@ import socket
 import json
 import threading
 import base64
+import time
 from cryptography.hazmat.primitives import serialization, hashes
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.backends import default_backend
@@ -14,6 +15,7 @@ class PeerClient:
         self.peer_port = 6000
         self.running = False
         self.public_key = None
+        self.listener_started = False
         
         # Configurar socket para conexões P2P
         self.peer_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -97,11 +99,17 @@ class PeerClient:
     
     def listen_for_peers(self):
         """Ouve conexões de outros peers (P2P)"""
-        self.peer_socket.bind(('0.0.0.0', self.peer_port))
-        self.peer_socket.listen(5)
-        self.running = True
-        print(f"[*] Ouvindo conexões P2P na porta {self.peer_port}")
-        
+        try:
+            self.peer_socket.bind(('0.0.0.0', self.peer_port))
+            self.peer_socket.listen(5)
+            self.running = True
+            print(f"\n[*] Ouvindo conexões P2P na porta {self.peer_port}\n")
+            self.listener_started = True
+        except Exception as e:
+            print(f"\n[!] Erro ao iniciar servidor P2P: {e}\n")
+            self.running = False
+            return
+            
         while self.running:
             try:
                 client_sock, addr = self.peer_socket.accept()
@@ -123,6 +131,30 @@ class PeerClient:
                 print(f" - Mensagem: {message.get('message', '')}\n")
         finally:
             client_socket.close()
+    
+    def send_command(self, command):
+        """Envia comando para o tracker (funciona antes do login)"""
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.connect((self.tracker_host, self.tracker_port))
+                s.send(json.dumps(command).encode('utf-8'))
+                return json.loads(s.recv(1024).decode())
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
+    
+    def show_main_menu(self):
+        """Mostra o menu principal após autenticação"""
+        # Garante que a mensagem do listener foi exibida
+        if not self.listener_started:
+            time.sleep(0.3)  # Pequeno delay para sincronização
+            
+        print(f"Bem-vindo(a), {self.username}!\n")
+        print("1. Listar peers ativos")
+        print("2. Listar salas")
+        print("3. Criar sala")
+        print("4. Logout")
+        choice = input("> ")
+        return choice
     
     def start(self):
         """Inicia o peer com menu principal"""
@@ -160,12 +192,13 @@ class PeerClient:
         
         # Autenticar no tracker
         login_response = self.connect_to_tracker(username, password)
-        print("Resposta do tracker:", login_response)
+        print("\nResposta do tracker:", login_response)
         
         if login_response.get("status") != "success":
             return
         
         self.username = username
+        self.listener_started = False
         
         # Iniciar thread para conexões P2P
         listener_thread = threading.Thread(target=self.listen_for_peers)
@@ -176,32 +209,48 @@ class PeerClient:
         self.main_menu()
     
     def register_flow(self):
-        """Fluxo de registro de novo usuário"""
-        username = input("Escolha um username: ")
-        password = input("Escolha uma senha: ")
-        confirm_password = input("Confirme a senha: ")
-        
-        if password != confirm_password:
-            print("Erro: As senhas não coincidem")
-            return
-        
-        # Registrar no tracker
-        register_response = self.register_on_tracker(username, password)
-        print("Resposta do tracker:", register_response)
-        
-        if register_response.get("status") == "success":
-            print("Registro bem-sucedido! Você pode fazer login agora.")
+        """Fluxo de registro de novo usuário com verificação prévia"""
+        while True:
+            username = input("\nEscolha um username (ou deixe vazio para cancelar): ")
+            if not username:
+                return
+            
+            # Verificar disponibilidade do username
+            check_response = self.send_command({
+                "cmd": "CHECK_USER",
+                "user": username
+            })
+            
+            if check_response.get("status") != "success":
+                print(f"Erro ao verificar usuário: {check_response.get('message', '')}")
+                continue
+                
+            if check_response["exists"]:
+                print("Erro: Este nome de usuário já está em uso. Escolha outro.")
+                continue
+                
+            # Se o username está disponível, pedir senha
+            password = input("Escolha uma senha: ")
+            confirm_password = input("Confirme a senha: ")
+            
+            if password != confirm_password:
+                print("Erro: As senhas não coincidem")
+                continue
+                
+            # Registrar no tracker
+            register_response = self.register_on_tracker(username, password)
+            print("\nResposta do tracker:", register_response)
+            
+            if register_response.get("status") == "success":
+                print("\n✅ Registro bem-sucedido! Você pode fazer login agora.")
+                break
+            else:
+                print(f"\n❌ Falha no registro: {register_response.get('message', '')}")
     
     def main_menu(self):
         """Menu principal após autenticação"""
         while True:
-            print(f"\nBem-vindo(a), {self.username}!")
-            print("1. Listar peers ativos")
-            print("2. Listar salas")
-            print("3. Criar sala")
-            print("4. Logout")
-            
-            choice = input("> ")
+            choice = self.show_main_menu()
             
             if choice == '1':
                 self.list_peers()
@@ -213,16 +262,6 @@ class PeerClient:
             elif choice == '4':
                 self.logout()
                 break
-    
-    def send_command(self, command):
-        """Envia comando para o tracker"""
-        try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.connect((self.tracker_host, self.tracker_port))
-                s.send(json.dumps(command).encode('utf-8'))
-                return json.loads(s.recv(1024).decode())
-        except Exception as e:
-            return {"status": "error", "message": str(e)}
     
     def list_peers(self):
         response = self.send_command({"cmd": "LIST_PEERS"})
@@ -259,6 +298,7 @@ class PeerClient:
             self.running = False
             self.peer_socket.close()
             self.username = None
+            self.listener_started = False
             print("Logout realizado com sucesso!")
 
 if __name__ == "__main__":
