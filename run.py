@@ -49,15 +49,15 @@ def main():
     
     time.sleep(2)  # Esperar inicialização
     
-    # Abrir peers em terminais separados (também na pasta src)
-    for i in range(1, 3):
+    # Abrir 4 peers em terminais separados (também na pasta src)
+    for i in range(1, 5):
         print(f"👥 Iniciando peer {i}...")
         open_terminal(peer_cmd, f"PEER {i}", src_dir)
         time.sleep(0.5)
     
-    print("\n✅ Demonstração iniciada em 3 terminais separados!")
+    print("\n✅ Demonstração iniciada em 5 terminais separados!")
     print("   - TRACKER: Autenticação e gerenciamento")
-    print("   - PEER 1 & PEER 2: Clientes para teste")
+    print("   - PEER 1, 2, 3, 4: Clientes para teste")
 
 if __name__ == "__main__":
     main()
