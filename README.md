@@ -1,55 +1,117 @@
+
 # Sistema de Chat P2P em Rede Local
+
 ## Introdução
 
-Este projeto implementa um sistema de comunicação **peer-to-peer (P2P)** para redes locais, permitindo que usuários troquem mensagens de forma segura e descentralizada. O sistema combina um servidor central (tracker) para autenticação e descoberta de peers com comunicação direta entre clientes, garantindo privacidade através de criptografia RSA.
+Este projeto implementa um sistema de comunicação **peer-to-peer (P2P)** para redes locais, unindo:
 
-### Características Principais:
-- 🔐 Autenticação segura com criptografia assimétrica
-- 👥 Comunicação direta entre usuários (P2P)
-- 📦 Troca de mensagens privadas (1:1)
-- 🏠 Criação e listagem de salas de grupo
-- 🌐 Operação em redes locais sem dependência da internet
+1. **Tracker (servidor central)**: gerencia autenticação, descoberta de peers e controle de salas.
+2. **Peer (cliente P2P)**: conecta-se ao tracker para login, depois troca mensagens diretamente com outros peers.
 
-## Como Funciona
+A comunicação é protegida por criptografia RSA, garantindo sigilo de credenciais e mensagens.
 
-O sistema opera em dois componentes principais:
+## Funcionalidades
 
-1. **Tracker**: Servidor central que:
-   - Gerencia autenticação de usuários
-   - Mantém registro de peers ativos
-   - Lista salas de chat disponíveis
-   - Opera como autoridade de confiança para troca de chaves públicas
+- 🔐 **Registro/Login** com RSA (criptografia OAEP) e armazenamento de senha (`hash + salt`).
+- 👥 **Peers ativos**: listagem e descoberta na rede local.
+- ✉️ **Mensagens diretas (DM)** 1:1, com histórico salvo em `users-dm.chats/`.
+- 🏠 **Salas de grupo**:
+  - Criação (pública/privada) e listagem global (tracker) e local (peer).
+  - Associação de membros com persistência em `rooms/rooms.json` (tracker) e `local_rooms/rooms.json` (peer).
+  - **Heartbeat**: exclusão automática por inatividade do moderador (configurável).
+  - **Gerenciamento** (apenas moderador):
+    1. Renomear sala (move histórico em `room_chats/`).
+    2. Alterar senha.
+    3. (Des)ativar exclusão por inatividade.
+    4. Remover membro (online ou offline).
+    5. Deletar sala.
+- 📜 **Histórico de chats**:
+  - **Salas** em `room_chats/room_<nome>.json`.
+  - **DMs** em `users-dm.chats/<usuário>-<outro>.json`.
+  - Histórico preservado ao entrar/sair e renomear salas.
 
-2. **Peer**: Cliente que:
-   - Conecta-se ao tracker para autenticação
-   - Descobre outros peers na rede local
-   - Estabelece conexões diretas para troca de mensagens
-   - Opera como servidor para receber mensagens de outros peers
+## Estrutura de Pastas
 
-## Tecnologias Utilizadas
-- **Linguagem**: Python 3
-- **Bibliotecas**:
-  - `cryptography` (criptografia RSA)
-  - `socket` (comunicação em rede)
-  - `threading` (processamento concorrente)
-  - `json` (formatação de mensagens)
-- **Protocolos**: TCP com mensagens JSON
+```text
+├── tracker.py              # servidor central (tracker)
+├── peer.py                 # cliente peer-to-peer
+├── requirements.txt        # dependências Python
+├── rooms/                  # dados globais de salas (tracker)
+│   └── rooms.json
+├── local_rooms/            # salas associadas localmente (peer)
+│   └── rooms.json
+├── room_chats/             # histórico de salas (peer)
+│   └── room_<nome>.json
+└── users-dm.chats/         # histórico de DMs (peer)
+    └── <usuário>-<outro>.json
+```
 
-## Arquitetura Segura
-As comunicações sensíveis (credenciais de login) são protegidas por:
-1. Criptografia RSA com chave pública do tracker
-2. Armazenamento seguro de senhas (hash + salt)
-3. Troca de chaves assimétricas no processo de autenticação
+## Instalação
 
-> **Nota**: Este projeto foi desenvolvido para redes locais confiáveis, sem tratamento avançado de NAT ou firewalls
-
-## Como Executar
+### Clonar repositório
 ```bash
-# Git clone
 git clone https://github.com/arthurfonsecaa/ChatP2P.git
+```
+cd ChatP2P
 
-# Instalar dependências
+### Criar e ativar ambiente virtual (opcional)
+```bash
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+venv\Scripts\activate     # Windows
+```
+
+### Instalar dependências
+```bash
 pip install -r requirements.txt
+```
 
-# Executar demonstração
+### Rodar
+```bash
 python run.py
+```
+
+## Uso
+
+### Iniciar o Tracker
+```bash
+python tracker.py
+```
+- Escuta na porta 5000 por padrão.
+
+- Gera par de chaves RSA na primeira execução.
+
+- Persiste usuários em users/users.json e salas em rooms/rooms.json.
+
+### Iniciar um Peer
+```bash
+python peer.py --tracker-host=<IP_DO_TRACKER> --tracker-port=5000
+```
+
+- Login/Registro: menu inicial.
+
+### Iniciar automaticamente 1 tracker + 4 peers
+
+```bash
+python run.py
+```
+
+### Menus:
+
+- Mensagens Diretas (DM): listar peers online e iniciar chat.
+
+- Minhas Salas: listar salas associadas; opção extra “Gerenciar Sala” se for moderador.
+
+- Entrar/Criar Sala.
+
+- Listar Peers Online e Listar Salas Locais.
+
+- Logout: encerra o socket e retorna ao menu de autenticação.
+
+
+## Considerações Finais
+- Desenvolvido para redes locais confiáveis.
+
+- Arquitetura híbrida: tracker para descoberta + peers para troca direta.
+
+- Pode servir de base para sistemas P2P seguros e customizáveis.
