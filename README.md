@@ -52,7 +52,10 @@ A comunicação é protegida por criptografia RSA, garantindo sigilo de credenci
 ```bash
 git clone https://github.com/arthurfonsecaa/ChatP2P.git
 ```
+### Acessar o diretório do projeto
+```bash
 cd ChatP2P
+```
 
 ### Criar e ativar ambiente virtual (opcional)
 ```bash
